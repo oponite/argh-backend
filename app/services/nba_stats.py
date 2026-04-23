@@ -1,9 +1,10 @@
-import httpx
 import asyncio
-from datetime import datetime
+from datetime import UTC, datetime
 from typing import List, Dict, Any, Optional
 
-from app.core.config import NBA_BASE_URL, NBA_HEADERS
+import httpx
+
+from app.core.config import NBA_BASE_URL, NBA_HEADERS, DEFAULT_TIMEOUT
 from app.utils.normalization import normalize
 from app.utils.team_aliases import TEAM_ALIASES, TEAM_IDS
 from app.errors import (
@@ -83,7 +84,7 @@ async def fetch_team_metrics(team_name: str) -> TeamMetrics:
 
     team_id = TEAM_IDS[resolved_name]
 
-    async with httpx.AsyncClient(headers=NBA_HEADERS, timeout=20.0) as client:
+    async with httpx.AsyncClient(headers=NBA_HEADERS, timeout=DEFAULT_TIMEOUT) as client:
 
         advanced_last5_task = fetch_rows(
             client=client,
@@ -457,7 +458,7 @@ def format_percentage_text(value: float) -> str:
 
 
 def current_season_string() -> str:
-    now = datetime.utcnow()
+    now = datetime.now(UTC)
     year = now.year
     month = now.month
     start_year = year if month >= 7 else year - 1

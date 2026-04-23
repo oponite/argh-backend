@@ -1,11 +1,13 @@
 import asyncio
-from datetime import datetime
+from datetime import UTC, datetime
 
 import pytest
 from fastapi import HTTPException
 
 from app import main
 from app.api import basketball
+from app.api import system
+from app.api.deps.auth import require_auth
 from app.errors import InvalidResponseError, RequestFailedError, StatsServiceError, TeamNotFoundError
 from app.models.requests import ProjectionRequest
 from app.models.responses import LeagueMetricsResponse, ProjectionResponse, TeamMetricsResponse
@@ -195,7 +197,7 @@ def test_nba_stat_helpers_and_models():
 
     season = nba_stats.current_season_string()
     trace("current_season_string", {}, season)
-    year = datetime.utcnow().year
+    year = datetime.now(UTC).year
     assert season.startswith(str(year - 1)) or season.startswith(str(year))
 
     params = nba_stats.query_items(measure_type="Advanced", last_n_games=5)
@@ -495,11 +497,26 @@ def test_basketball_projection_error(monkeypatch):
         raise StatsServiceError("service failed")
 
     monkeypatch.setattr(basketball, "build_projection", fake_build_projection)
-    req = ProjectionRequest(away_team="A", home_team="B", bookie_total=1)
+    req = ProjectionRequest(away_team="AA", home_team="BB", bookie_total=1)
 
     with pytest.raises(HTTPException) as exc:
         run(basketball.basketball_projection(req))
     trace("basketball_projection", req.model_dump(), f"raised {type(exc.value).__name__}: {exc.value.detail}")
 
     assert exc.value.status_code == 400
-    assert exc.value.detail is str
+    assert exc.value.detail == "service failed"
+
+
+def test_auth_me_route_without_auth_enabled():
+    out = run(system.auth_me(token=None), function_name="auth_me", inputs={"token": None})
+    assert out == {"authenticated": False, "token_present": False}
+
+
+def test_require_auth_disabled_is_noop():
+    out = run(require_auth(credentials=None), function_name="require_auth", inputs={"credentials": None})
+    assert out is None
+
+
+def test_cors_middleware_registered():
+    middleware_names = [m.cls.__name__ for m in main.app.user_middleware]
+    assert "CORSMiddleware" in middleware_names

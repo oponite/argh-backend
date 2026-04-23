@@ -1,6 +1,6 @@
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 class ProjectionRequest(BaseModel):
-    away_team: str
-    home_team: str
-    bookie_total: float
+    away_team: str = Field(min_length=2, max_length=64)
+    home_team: str = Field(min_length=2, max_length=64)
+    bookie_total: float = Field(gt=0)
