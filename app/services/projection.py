@@ -1,15 +1,14 @@
 import numpy as np
 from app.services.nba_stats import fetch_team_metrics
-from app.utils.statistics import classify_z_score
+import httpx
 
+# Precompute constants
+WEIGHTS = np.linspace(0.5, 0.8, 10_000)
+ONE_MINUS_WEIGHTS = 1 - WEIGHTS
 
-# TODO: add redis dependency to reduce # of API calls
-
-async def build_projection(away_team, home_team, bookie_total):
-    away = await fetch_team_metrics(away_team)
-    home = await fetch_team_metrics(home_team)
-
-    weights = np.linspace(0.5, 0.8, 10_000)
+async def build_projection(client: httpx.AsyncClient, away_team, home_team):
+    away = await fetch_team_metrics(client, away_team)
+    home = await fetch_team_metrics(client, home_team)
 
     away_off = np.array([g.off_rating for g in away.recent_games])
     away_def = np.array([g.def_rating for g in away.recent_games])
@@ -19,38 +18,33 @@ async def build_projection(away_team, home_team, bookie_total):
     home_def = np.array([g.def_rating for g in home.recent_games])
     home_pace = np.array([g.pace for g in home.recent_games])
 
+    # avg_pace is (5, 5) array
     avg_pace = (away_pace[:, None] + home_pace[None, :]) / 2
 
+    # Vectorized computation using precomputed weights
+    # away_component: (10000, 5, 5)
     away_component = (
-            weights[:, None, None]
-            * away_off[None, :, None]
-            + (1 - weights[:, None, None])
-            * home_def[None, None, :]
+            WEIGHTS[:, None, None] * away_off[None, :, None]
+            + ONE_MINUS_WEIGHTS[:, None, None] * home_def[None, None, :]
     )
 
+    # home_component: (10000, 5, 5)
     home_component = (
-            weights[:, None, None]
-            * home_off[None, None, :]
-            + (1 - weights[:, None, None])
-            * away_def[None, :, None]
+            WEIGHTS[:, None, None] * home_off[None, None, :]
+            + ONE_MINUS_WEIGHTS[:, None, None] * away_def[None, :, None]
     )
 
-    totals = ((away_component + home_component) / 100) * avg_pace
+    # totals: (10000, 5, 5)
+    totals = ((away_component + home_component) / 100) * avg_pace[None, :, :]
 
-    totals_flat = totals.reshape(-1)
-
-    projected_total = float(np.mean(totals_flat))
-    std_dev = float(np.std(totals_flat)) or 1e-6
-
-    z_score = (projected_total - bookie_total) / std_dev
+    projected_total = float(np.mean(totals))
+    std_dev = float(np.std(totals)) or 1e-6
 
     return {
         "away_team_name": away.display_name,
         "home_team_name": home.display_name,
         "projected_total": projected_total,
         "projected_total_std_dev": std_dev,
-        "totals_z_score": z_score,
-        "totals_classification": classify_z_score(z_score),
         "away": away.as_dict(),
         "home": home.as_dict(),
         "league": away.league_metrics(),

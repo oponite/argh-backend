@@ -17,8 +17,6 @@ class ProjectionResponse(BaseModel):
 
     projected_total: float
     projected_total_std_dev: float
-    totals_z_score: float
-    totals_classification: str
 
     away: TeamMetricsResponse
     home: TeamMetricsResponse

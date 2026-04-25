@@ -13,6 +13,7 @@ from app.errors import (
     RequestFailedError,
 )
 from app.utils.statistics import mean, std_dev
+from app.utils.cache import cached_fetch_rows, cached_fetch_team_metrics
 
 
 # =========================================================
@@ -71,7 +72,8 @@ class TeamMetrics:
 # Swift: NBAStatsService.fetchMetrics(for:)
 # =========================================================
 
-async def fetch_team_metrics(team_name: str) -> TeamMetrics:
+@cached_fetch_team_metrics
+async def fetch_team_metrics(client: httpx.AsyncClient, team_name: str) -> TeamMetrics:
     normalized_input = normalize(team_name)
 
     if normalized_input not in TEAM_ALIASES:
@@ -84,89 +86,87 @@ async def fetch_team_metrics(team_name: str) -> TeamMetrics:
 
     team_id = TEAM_IDS[resolved_name]
 
-    async with httpx.AsyncClient(headers=NBA_HEADERS, timeout=DEFAULT_TIMEOUT) as client:
+    advanced_last5_task = fetch_rows(
+        client=client,
+        measure_type="Advanced",
+        last_n_games=5,
+    )
 
-        advanced_last5_task = fetch_rows(
-            client=client,
-            measure_type="Advanced",
-            last_n_games=5,
-        )
+    scoring_rows_task = fetch_rows(
+        client=client,
+        measure_type="Scoring",
+        last_n_games=0,
+    )
 
-        scoring_rows_task = fetch_rows(
-            client=client,
-            measure_type="Scoring",
-            last_n_games=0,
-        )
+    advanced_last5_rows, scoring_rows = await asyncio.gather(
+        advanced_last5_task,
+        scoring_rows_task,
+    )
 
-        advanced_last5_rows, scoring_rows = await asyncio.gather(
-            advanced_last5_task,
-            scoring_rows_task,
-        )
+    recent_games = await resolved_recent_games(
+        client=client,
+        team_id=team_id,
+        resolved_name=resolved_name,
+        advanced_last5_rows=advanced_last5_rows,
+    )
 
-        recent_games = await resolved_recent_games(
-            client=client,
-            team_id=team_id,
-            resolved_name=resolved_name,
-            advanced_last5_rows=advanced_last5_rows,
-        )
+    scoring_row = next(
+        (
+            row
+            for row in scoring_rows
+            if matches_team(row, expected_name=resolved_name)
+        ),
+        None,
+    )
 
-        scoring_row = next(
-            (
-                row
-                for row in scoring_rows
-                if matches_team(row, expected_name=resolved_name)
-            ),
-            None,
-        )
+    if scoring_row is None:
+        raise InvalidResponseError()
 
-        if scoring_row is None:
-            raise InvalidResponseError()
+    three_point_pct_raw = value_for(
+        keys=["PCT_PTS_3PT"], row=scoring_row
+    )
 
-        three_point_pct_raw = value_for(
-            keys=["PCT_PTS_3PT"], row=scoring_row
-        )
+    if three_point_pct_raw is None:
+        raise InvalidResponseError()
 
-        if three_point_pct_raw is None:
-            raise InvalidResponseError()
+    off_values = [g.off_rating for g in recent_games]
+    def_values = [g.def_rating for g in recent_games]
+    pace_values = [g.pace for g in recent_games]
 
-        off_values = [g.off_rating for g in recent_games]
-        def_values = [g.def_rating for g in recent_games]
-        pace_values = [g.pace for g in recent_games]
+    off_rating_mean = mean(off_values)
+    def_rating_mean = mean(def_values)
+    pace_mean = mean(pace_values)
 
-        off_rating_mean = mean(off_values)
-        def_rating_mean = mean(def_values)
-        pace_mean = mean(pace_values)
+    league_three_point_values: List[float] = []
+    for row in scoring_rows:
+        raw = value_for(["PCT_PTS_3PT"], row)
+        if raw is not None:
+            league_three_point_values.append(
+                raw * 100 if raw <= 1 else raw
+            )
 
-        league_three_point_values: List[float] = []
-        for row in scoring_rows:
-            raw = value_for(["PCT_PTS_3PT"], row)
-            if raw is not None:
-                league_three_point_values.append(
-                    raw * 100 if raw <= 1 else raw
-                )
+    league_avg_three_point_pct = mean(league_three_point_values)
+    league_three_point_std_dev = std_dev(league_three_point_values)
 
-        league_avg_three_point_pct = mean(league_three_point_values)
-        league_three_point_std_dev = std_dev(league_three_point_values)
+    three_point_pct = (
+        three_point_pct_raw * 100
+        if three_point_pct_raw <= 1
+        else three_point_pct_raw
+    )
 
-        three_point_pct = (
-            three_point_pct_raw * 100
-            if three_point_pct_raw <= 1
-            else three_point_pct_raw
-        )
+    three_point_pct_text = format_percentage_text(three_point_pct)
 
-        three_point_pct_text = format_percentage_text(three_point_pct)
-
-        return TeamMetrics(
-            display_name=resolved_name,
-            recent_games=recent_games,
-            off_rating_mean=off_rating_mean,
-            def_rating_mean=def_rating_mean,
-            pace_mean=pace_mean,
-            three_point_pct=three_point_pct,
-            three_point_pct_text=three_point_pct_text,
-            league_average_three_point_pct=league_avg_three_point_pct,
-            league_three_point_pct_standard_deviation=league_three_point_std_dev,
-        )
+    return TeamMetrics(
+        display_name=resolved_name,
+        recent_games=recent_games,
+        off_rating_mean=off_rating_mean,
+        def_rating_mean=def_rating_mean,
+        pace_mean=pace_mean,
+        three_point_pct=three_point_pct,
+        three_point_pct_text=three_point_pct_text,
+        league_average_three_point_pct=league_avg_three_point_pct,
+        league_three_point_pct_standard_deviation=league_three_point_std_dev,
+    )
 
 
 # =========================================================
@@ -229,17 +229,16 @@ async def fetch_recent_game_metrics(
         team_id=team_id,
     )
 
-    metrics: List[GameAdvancedMetrics] = []
-
-    for game_id in recent_game_ids:
-        metric = await fetch_game_advanced_metrics(
+    tasks = [
+        fetch_game_advanced_metrics(
             client=client,
             game_id=game_id,
             team_id=team_id,
         )
-        metrics.append(metric)
+        for game_id in recent_game_ids
+    ]
 
-    return metrics
+    return list(await asyncio.gather(*tasks))
 
 
 # =========================================================
@@ -341,6 +340,7 @@ async def fetch_game_advanced_metrics(
 # Swift: fetchRows
 # =========================================================
 
+@cached_fetch_rows
 async def fetch_rows(
     client: httpx.AsyncClient,
     measure_type: str,

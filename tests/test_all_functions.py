@@ -14,7 +14,7 @@ from app.models.responses import LeagueMetricsResponse, ProjectionResponse, Team
 from app.services import nba_stats, projection
 from app.services.nba_stats import GameAdvancedMetrics, TeamMetrics
 from app.utils.normalization import normalize
-from app.utils.statistics import classify_z_score, mean, std_dev
+from app.utils.statistics import mean, std_dev
 
 
 def trace(function_name, inputs, output):
@@ -97,22 +97,6 @@ def test_statistics_helpers():
     trace("std_dev", {"values": [2, 2, 2]}, out_std)
     assert out_std == 1e-6
 
-    out_c1 = classify_z_score(0.1)
-    trace("classify_z_score", {"z": 0.1}, out_c1)
-    assert out_c1 == "Noise: no identifiable edge"
-
-    out_c2 = classify_z_score(1.2)
-    trace("classify_z_score", {"z": 1.2}, out_c2)
-    assert out_c2 == "Mild edge: watch for in-game deviation"
-
-    out_c3 = classify_z_score(1.7)
-    trace("classify_z_score", {"z": 1.7}, out_c3)
-    assert out_c3 == "Solid edge: actionable for small initial entry"
-
-    out_c4 = classify_z_score(-2.2)
-    trace("classify_z_score", {"z": -2.2}, out_c4)
-    assert out_c4 == "Strong disagreement"
-
 
 def test_response_models_construct():
     away = TeamMetricsResponse(
@@ -135,8 +119,6 @@ def test_response_models_construct():
         home_team_name="New York Knicks",
         projected_total=221.5,
         projected_total_std_dev=6.8,
-        totals_z_score=0.44,
-        totals_classification="Noise: no identifiable edge",
         away=away,
         home=home,
         league=league,
@@ -148,8 +130,6 @@ def test_response_models_construct():
             "home_team_name": "New York Knicks",
             "projected_total": 221.5,
             "projected_total_std_dev": 6.8,
-            "totals_z_score": 0.44,
-            "totals_classification": "Noise: no identifiable edge",
             "away": away.model_dump(),
             "home": home.model_dump(),
             "league": league.model_dump(),
@@ -446,7 +426,7 @@ def test_fetch_team_metrics_success(monkeypatch):
     monkeypatch.setattr(nba_stats, "resolved_recent_games", fake_resolved_recent_games)
 
     out = run(
-        nba_stats.fetch_team_metrics("celtics"),
+        nba_stats.fetch_team_metrics(client=object(), team_name="celtics"),
         function_name="fetch_team_metrics",
         inputs={"team_name": "celtics"},
     )
@@ -457,50 +437,49 @@ def test_fetch_team_metrics_success(monkeypatch):
 
 def test_fetch_team_metrics_unknown_team():
     with pytest.raises(TeamNotFoundError) as exc:
-        run(nba_stats.fetch_team_metrics("not-a-team"))
+        run(nba_stats.fetch_team_metrics(client=object(), team_name="not-a-team"))
     trace("fetch_team_metrics", {"team_name": "not-a-team"}, f"raised {type(exc.value).__name__}")
 
 
 def test_build_projection(monkeypatch):
-    async def fake_fetch_team_metrics(team):
+    async def fake_fetch_team_metrics(client, team):
         return _team_metrics("Boston Celtics" if "boston" in team.lower() else "New York Knicks")
 
     monkeypatch.setattr(projection, "fetch_team_metrics", fake_fetch_team_metrics)
 
     out = run(
-        projection.build_projection("Boston Celtics", "New York Knicks", 220.5),
+        projection.build_projection(client=object(), away_team="Boston Celtics", home_team="New York Knicks"),
         function_name="build_projection",
-        inputs={"away_team": "Boston Celtics", "home_team": "New York Knicks", "bookie_total": 220.5},
+        inputs={"away_team": "Boston Celtics", "home_team": "New York Knicks"},
     )
     assert out["away_team_name"] == "Boston Celtics"
     assert out["home_team_name"] == "New York Knicks"
     assert isinstance(out["projected_total"], float)
-    assert "totals_classification" in out
 
 
 def test_basketball_projection_success(monkeypatch):
-    async def fake_build_projection(away_team, home_team, bookie_total):
-        return {"ok": True, "away": away_team, "home": home_team, "line": bookie_total}
+    async def fake_build_projection(client, away_team, home_team):
+        return {"away_team_name": away_team, "home_team_name": home_team, "projected_total": 220.0, "projected_total_std_dev": 10.0, "away": {}, "home": {}, "league": {}}
 
     monkeypatch.setattr(basketball, "build_projection", fake_build_projection)
-    req = ProjectionRequest(away_team="Boston Celtics", home_team="New York Knicks", bookie_total=220.5)
+    req = ProjectionRequest(away_team="Boston Celtics", home_team="New York Knicks")
     out = run(
-        basketball.basketball_projection(req),
+        basketball.basketball_projection(req, client=object()),
         function_name="basketball_projection",
         inputs=req.model_dump(),
     )
-    assert out["ok"] is True
+    assert out["away_team_name"] == "Boston Celtics"
 
 
 def test_basketball_projection_error(monkeypatch):
-    async def fake_build_projection(away_team, home_team, bookie_total):
+    async def fake_build_projection(client, away_team, home_team):
         raise StatsServiceError("service failed")
 
     monkeypatch.setattr(basketball, "build_projection", fake_build_projection)
-    req = ProjectionRequest(away_team="AA", home_team="BB", bookie_total=1)
+    req = ProjectionRequest(away_team="AA", home_team="BB")
 
     with pytest.raises(HTTPException) as exc:
-        run(basketball.basketball_projection(req))
+        run(basketball.basketball_projection(req, client=object()))
     trace("basketball_projection", req.model_dump(), f"raised {type(exc.value).__name__}: {exc.value.detail}")
 
     assert exc.value.status_code == 400
