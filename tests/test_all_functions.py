@@ -3,6 +3,7 @@ from datetime import UTC, datetime
 
 import pytest
 from fastapi import HTTPException
+from fastapi.testclient import TestClient
 
 from app import main
 from app.services.basketball import api as basketball
@@ -504,3 +505,96 @@ def test_require_auth_disabled_is_noop():
 def test_cors_middleware_registered():
     middleware_names = [m.cls.__name__ for m in main.app.user_middleware]
     assert "CORSMiddleware" in middleware_names
+
+
+def test_health_endpoint_http_contract():
+    client = TestClient(main.app)
+    response = client.get("/health")
+
+    assert response.status_code == 200
+    assert response.json() == {"status": "ok"}
+
+
+def test_auth_me_endpoint_http_contract_with_dependency_override():
+    async def fake_require_auth():
+        return "demo-token"
+
+    main.app.dependency_overrides[require_auth] = fake_require_auth
+    try:
+        client = TestClient(main.app)
+        response = client.get("/api/auth/me")
+
+        assert response.status_code == 200
+        assert response.json() == {"authenticated": False, "token_present": True}
+    finally:
+        main.app.dependency_overrides.clear()
+
+
+def test_basketball_projection_endpoint_http_contract_success(monkeypatch):
+    async def fake_build_projection(client, away_team, home_team):
+        return {
+            "away_team_name": away_team,
+            "home_team_name": home_team,
+            "projected_total": 220.0,
+            "projected_total_std_dev": 10.0,
+            "away": {
+                "off_rating": 111.0,
+                "def_rating": 107.0,
+                "pace": 100.0,
+                "three_point_pct": 36.4,
+                "three_point_pct_text": "36.4",
+            },
+            "home": {
+                "off_rating": 109.0,
+                "def_rating": 108.0,
+                "pace": 99.0,
+                "three_point_pct": 35.2,
+                "three_point_pct_text": "35.2",
+            },
+            "league": {
+                "avg_3pt_pct": 35.8,
+                "std_dev_3pt_pct": 2.1,
+            },
+        }
+
+    monkeypatch.setattr(basketball, "build_projection", fake_build_projection)
+    client = TestClient(main.app)
+    response = client.post(
+        "/api/basketball/projection",
+        json={"away_team": "Boston Celtics", "home_team": "New York Knicks"},
+    )
+
+    body = response.json()
+    assert response.status_code == 200
+    assert body["away_team_name"] == "Boston Celtics"
+    assert body["home_team_name"] == "New York Knicks"
+    assert body["projected_total"] == 220.0
+    assert body["away"]["off_rating"] == 111.0
+    assert body["league"]["avg_3pt_pct"] == 35.8
+
+
+def test_basketball_projection_endpoint_http_contract_error(monkeypatch):
+    async def fake_build_projection(client, away_team, home_team):
+        raise StatsServiceError("service failed")
+
+    monkeypatch.setattr(basketball, "build_projection", fake_build_projection)
+    client = TestClient(main.app)
+    response = client.post(
+        "/api/basketball/projection",
+        json={"away_team": "Boston Celtics", "home_team": "New York Knicks"},
+    )
+
+    assert response.status_code == 400
+    assert response.json() == {"detail": "service failed"}
+
+
+def test_basketball_projection_endpoint_validation_error_short_team_name():
+    client = TestClient(main.app)
+    response = client.post(
+        "/api/basketball/projection",
+        json={"away_team": "A", "home_team": "New York Knicks"},
+    )
+
+    assert response.status_code == 422
+    detail = response.json()["detail"]
+    assert any(item["loc"][-1] == "away_team" for item in detail)
