@@ -6,7 +6,6 @@ from functools import wraps
 class EODCache(TTLCache):
     """A cache that expires at the end of the day."""
     def __init__(self, maxsize):
-        # We set a large initial TTL, but we will override the expiration logic
         super().__init__(maxsize=maxsize, ttl=86400)
 
     def _get_ttl_to_eod(self):
@@ -15,11 +14,6 @@ class EODCache(TTLCache):
         return (eod - now).total_seconds()
 
     def __setitem__(self, key, value):
-        # We can't easily change global TTL in cachetools 5.x because it's usually fixed at init.
-        # But we can expire items manually or use a custom cache.
-        # For simplicity, let's just use the super method and handle EOD via scheduler if needed,
-        # or just accept the 24h default and let it roll over.
-        # However, the user asked for EOD clearing.
         super().__setitem__(key, value)
 
 # Cache for fetch_rows (league-wide data)

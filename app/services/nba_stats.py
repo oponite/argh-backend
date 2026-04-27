@@ -16,10 +16,6 @@ from app.utils.statistics import mean, std_dev
 from app.utils.cache import cached_fetch_rows, cached_fetch_team_metrics
 
 
-# =========================================================
-# Data Models (Swift structs → Python classes)
-# =========================================================
-
 class GameAdvancedMetrics:
     def __init__(self, off_rating: float, def_rating: float, pace: float):
         self.off_rating = off_rating
@@ -66,11 +62,6 @@ class TeamMetrics:
             "std_dev_3pt_pct": self.league_three_point_pct_standard_deviation,
         }
 
-
-# =========================================================
-# Public entry point
-# Swift: NBAStatsService.fetchMetrics(for:)
-# =========================================================
 
 @cached_fetch_team_metrics
 async def fetch_team_metrics(client: httpx.AsyncClient, team_name: str) -> TeamMetrics:
@@ -169,9 +160,6 @@ async def fetch_team_metrics(client: httpx.AsyncClient, team_name: str) -> TeamM
     )
 
 
-# =========================================================
-# Swift: resolvedRecentGames()
-# =========================================================
 
 async def resolved_recent_games(
     client: httpx.AsyncClient,
@@ -215,9 +203,6 @@ async def resolved_recent_games(
         return [fallback_game] * 5
 
 
-# =========================================================
-# Swift: fetchRecentGameMetrics
-# =========================================================
 
 async def fetch_recent_game_metrics(
     client: httpx.AsyncClient,
@@ -241,9 +226,6 @@ async def fetch_recent_game_metrics(
     return list(await asyncio.gather(*tasks))
 
 
-# =========================================================
-# Swift: fetchRecentGameIDs
-# =========================================================
 
 async def fetch_recent_game_ids(
     client: httpx.AsyncClient,
@@ -281,10 +263,6 @@ async def fetch_recent_game_ids(
 
     return recent_game_ids
 
-
-# =========================================================
-# Swift: fetchGameAdvancedMetrics
-# =========================================================
 
 async def fetch_game_advanced_metrics(
     client: httpx.AsyncClient,
@@ -336,10 +314,6 @@ async def fetch_game_advanced_metrics(
     )
 
 
-# =========================================================
-# Swift: fetchRows
-# =========================================================
-
 @cached_fetch_rows
 async def fetch_rows(
     client: httpx.AsyncClient,
@@ -360,10 +334,6 @@ async def fetch_rows(
         params=params,
     )
 
-
-# =========================================================
-# Swift: fetchResultSetRows + retry
-# =========================================================
 
 async def fetch_result_set_rows(
     client: httpx.AsyncClient,
@@ -420,10 +390,6 @@ async def fetch_result_set_rows(
 
     raise RequestFailedError() from last_error
 
-
-# =========================================================
-# Utility functions (exact Swift ports)
-# =========================================================
 
 def matches_team(row: Dict[str, Any], expected_name: str) -> bool:
     row_name = normalize(str(row.get("TEAM_NAME", "")))
