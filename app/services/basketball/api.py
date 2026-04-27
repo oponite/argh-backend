@@ -1,8 +1,7 @@
-from app.models.requests import ProjectionRequest
-from app.models.responses import ProjectionResponse
-from app.services.projection import build_projection
-from app.errors import StatsServiceError
-from app.api.deps.http_client import get_http_client
+from app.services.basketball.schemas import ProjectionRequest, ProjectionResponse
+from app.services.basketball.logic import build_projection
+from app.core.errors import StatsServiceError
+from app.core.deps.http_client import get_http_client
 import httpx
 from fastapi import APIRouter, HTTPException, Depends
 

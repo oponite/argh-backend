@@ -1,5 +1,5 @@
 import numpy as np
-from app.services.nba_stats import fetch_team_metrics
+from app.services.basketball.integrations.nba_stats import fetch_team_metrics
 import httpx
 
 # Precompute constants

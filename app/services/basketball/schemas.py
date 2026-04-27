@@ -1,4 +1,9 @@
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
+
+class ProjectionRequest(BaseModel):
+    away_team: str = Field(min_length=2, max_length=64)
+    home_team: str = Field(min_length=2, max_length=64)
+
 
 class TeamMetricsResponse(BaseModel):
     off_rating: float | None
@@ -7,9 +12,11 @@ class TeamMetricsResponse(BaseModel):
     three_point_pct: float | None
     three_point_pct_text: str | None
 
+
 class LeagueMetricsResponse(BaseModel):
     avg_3pt_pct: float
     std_dev_3pt_pct: float
+
 
 class ProjectionResponse(BaseModel):
     away_team_name: str

@@ -5,16 +5,21 @@ import pytest
 from fastapi import HTTPException
 
 from app import main
-from app.api import basketball
-from app.api import system
-from app.api.deps.auth import require_auth
-from app.errors import InvalidResponseError, RequestFailedError, StatsServiceError, TeamNotFoundError
-from app.models.requests import ProjectionRequest
-from app.models.responses import LeagueMetricsResponse, ProjectionResponse, TeamMetricsResponse
-from app.services import nba_stats, projection
-from app.services.nba_stats import GameAdvancedMetrics, TeamMetrics
-from app.utils.normalization import normalize
-from app.utils.statistics import mean, std_dev
+from app.services.basketball import api as basketball
+from app.services.system import api as system
+from app.core.deps.auth import require_auth
+from app.core.errors import InvalidResponseError, RequestFailedError, StatsServiceError, TeamNotFoundError
+from app.services.basketball.schemas import (
+    LeagueMetricsResponse,
+    ProjectionRequest,
+    ProjectionResponse,
+    TeamMetricsResponse,
+)
+from app.services.basketball.integrations import nba_stats
+from app.services.basketball import logic as projection
+from app.services.basketball.integrations.nba_stats import GameAdvancedMetrics, TeamMetrics
+from app.core.utils.normalization import normalize
+from app.core.utils.statistics import mean, std_dev
 
 
 def trace(function_name, inputs, output):

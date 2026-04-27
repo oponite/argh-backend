@@ -5,15 +5,15 @@ from typing import List, Dict, Any, Optional
 import httpx
 
 from app.core.config import NBA_BASE_URL, NBA_HEADERS, DEFAULT_TIMEOUT
-from app.utils.normalization import normalize
-from app.utils.team_aliases import TEAM_ALIASES, TEAM_IDS
-from app.errors import (
+from app.core.utils.normalization import normalize
+from app.core.utils.team_aliases import TEAM_ALIASES, TEAM_IDS
+from app.core.errors import (
     TeamNotFoundError,
     InvalidResponseError,
     RequestFailedError,
 )
-from app.utils.statistics import mean, std_dev
-from app.utils.cache import cached_fetch_rows, cached_fetch_team_metrics
+from app.core.utils.statistics import mean, std_dev
+from app.core.utils.cache import cached_fetch_rows, cached_fetch_team_metrics
 
 
 class GameAdvancedMetrics:

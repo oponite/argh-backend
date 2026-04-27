@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Depends
 
-from app.api.deps.auth import require_auth
+from app.core.deps.auth import require_auth
 from app.core.config import settings
 
 router = APIRouter()

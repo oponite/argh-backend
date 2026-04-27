@@ -1,11 +1,11 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from app.api.basketball import router as basketball_router
-from app.api.system import router as system_router
+from app.services.basketball.api import router as basketball_router
+from app.services.system.api import router as system_router
 from app.core.config import settings
 
-from app.api.deps.http_client import ClientManager
-from app.services.background_tasks import scheduler
+from app.core.deps.http_client import ClientManager
+from app.services.background.scheduler import scheduler
 import asyncio
 
 from contextlib import asynccontextmanager

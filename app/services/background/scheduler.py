@@ -1,9 +1,9 @@
 import asyncio
 import logging
 from datetime import datetime, time, timedelta
-from app.services.nba_stats import fetch_team_metrics
-from app.utils.team_aliases import TEAM_IDS
-from app.api.deps.http_client import ClientManager
+from app.services.basketball.integrations.nba_stats import fetch_team_metrics
+from app.core.utils.team_aliases import TEAM_IDS
+from app.core.deps.http_client import ClientManager
 
 logger = logging.getLogger(__name__)
 
