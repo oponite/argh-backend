@@ -69,6 +69,39 @@ TEAM_ALIASES = {
     "washington wizards": "Washington Wizards"
 }
 
+TEAM_ALIASES.update({
+    "atl": "Atlanta Hawks",
+    "bos": "Boston Celtics",
+    "bkn": "Brooklyn Nets",
+    "cha": "Charlotte Hornets",
+    "chi": "Chicago Bulls",
+    "cle": "Cleveland Cavaliers",
+    "dal": "Dallas Mavericks",
+    "den": "Denver Nuggets",
+    "det": "Detroit Pistons",
+    "gsw": "Golden State Warriors",
+    "hou": "Houston Rockets",
+    "ind": "Indiana Pacers",
+    "lac": "LA Clippers",
+    "lal": "Los Angeles Lakers",
+    "mem": "Memphis Grizzlies",
+    "mia": "Miami Heat",
+    "mil": "Milwaukee Bucks",
+    "min": "Minnesota Timberwolves",
+    "nop": "New Orleans Pelicans",
+    "nyk": "New York Knicks",
+    "okc": "Oklahoma City Thunder",
+    "orl": "Orlando Magic",
+    "phi": "Philadelphia 76ers",
+    "phx": "Phoenix Suns",
+    "por": "Portland Trail Blazers",
+    "sac": "Sacramento Kings",
+    "sas": "San Antonio Spurs",
+    "tor": "Toronto Raptors",
+    "uta": "Utah Jazz",
+    "was": "Washington Wizards",
+})
+
 TEAM_IDS = {
     "Atlanta Hawks": 1610612737,
     "Boston Celtics": 1610612738,

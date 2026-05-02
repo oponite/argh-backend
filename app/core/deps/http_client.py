@@ -1,5 +1,5 @@
 import httpx
-from app.core.config import NBA_HEADERS, DEFAULT_TIMEOUT
+from app.core.config import NBA_HEADERS
 
 class ClientManager:
     _client: httpx.AsyncClient | None = None
@@ -7,7 +7,19 @@ class ClientManager:
     @classmethod
     def get_client(cls) -> httpx.AsyncClient:
         if cls._client is None or cls._client.is_closed:
-            cls._client = httpx.AsyncClient(headers=NBA_HEADERS, timeout=DEFAULT_TIMEOUT)
+            timeout = httpx.Timeout(
+                connect=10.0,
+                read=30.0,
+                write=10.0,
+                pool=10.0,
+            )
+
+            cls._client = httpx.AsyncClient(
+                headers=NBA_HEADERS,
+                timeout=timeout,
+                follow_redirects=True,
+            )
+
         return cls._client
 
     @classmethod

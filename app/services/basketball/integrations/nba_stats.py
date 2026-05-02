@@ -62,19 +62,27 @@ class TeamMetrics:
             "std_dev_3pt_pct": self.league_three_point_pct_standard_deviation,
         }
 
+def resolve_team_name(team_name: str) -> str:
+    normalized_input = normalize(team_name)
+
+    # 1. Alias match: "bos", "celtics", etc.
+    resolved_name = TEAM_ALIASES.get(normalized_input)
+    if resolved_name:
+        if resolved_name not in TEAM_IDS:
+            raise TeamNotFoundError(resolved_name)
+        return resolved_name
+
+    # 2. Direct full-name match: "Boston Celtics"
+    for official_name in TEAM_IDS.keys():
+        if normalize(official_name) == normalized_input:
+            return official_name
+
+    # 3. Nothing matched
+    raise TeamNotFoundError(team_name)
 
 @cached_fetch_team_metrics
 async def fetch_team_metrics(client: httpx.AsyncClient, team_name: str) -> TeamMetrics:
-    normalized_input = normalize(team_name)
-
-    if normalized_input not in TEAM_ALIASES:
-        raise TeamNotFoundError(team_name)
-
-    resolved_name = TEAM_ALIASES[normalized_input]
-
-    if resolved_name not in TEAM_IDS:
-        raise TeamNotFoundError(resolved_name)
-
+    resolved_name = resolve_team_name(team_name)
     team_id = TEAM_IDS[resolved_name]
 
     advanced_last5_task = fetch_rows(
@@ -342,15 +350,17 @@ async def fetch_result_set_rows(
     preferred_result_set_name: Optional[str] = None,
 ) -> List[Dict[str, Any]]:
 
-    delays = [0.0, 0.4, 1.0]
+    delays = [0.0, 1.0, 3.0]
     last_error: Optional[Exception] = None
 
-    for delay in delays:
+    for i, delay in enumerate(delays):
         if delay > 0:
             await asyncio.sleep(delay)
 
         try:
-            response = await client.get(url, params=params)
+            # NBA API is slow, give it plenty of time
+            request_timeout = 30.0
+            response = await client.get(url, params=params, timeout=request_timeout)
             response.raise_for_status()
 
             payload = response.json()
@@ -388,7 +398,7 @@ async def fetch_result_set_rows(
         except Exception as e:
             last_error = e
 
-    raise RequestFailedError() from last_error
+    raise RequestFailedError(f"NBA stats request failed: {repr(last_error)}") from last_error
 
 
 def matches_team(row: Dict[str, Any], expected_name: str) -> bool:

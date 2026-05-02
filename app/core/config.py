@@ -24,14 +24,14 @@ AUTH_TOKENS = _parse_csv(os.getenv("AUTH_TOKENS"))
 
 NBA_BASE_URL = os.getenv("NBA_BASE_URL", "https://stats.nba.com/stats")
 DEFAULT_TIMEOUT = float(os.getenv("DEFAULT_TIMEOUT", "15.0"))
-USER_AGENT = os.getenv("USER_AGENT", "Mozilla/5.0")
+USER_AGENT = os.getenv("USER_AGENT", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
 NBA_HEADERS = {
     "User-Agent": USER_AGENT,
-    "Referer": "https://www.nba.com/",
+    "Accept": "*/*",
+    "Accept-Language": "en-US,en;q=0.9",
     "Origin": "https://www.nba.com",
-    "Accept": "application/json, text/plain, */*",
-    "x-nba-stats-origin": "stats",
-    "x-nba-stats-token": "true",
+    "Referer": "https://www.nba.com/",
+    "Connection": "keep-alive",
 }
 
 # Keep a small settings object because the rest of the app imports settings.*.

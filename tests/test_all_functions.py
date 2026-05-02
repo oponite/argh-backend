@@ -52,7 +52,7 @@ class DummyClient:
     def __init__(self, responses):
         self._responses = list(responses)
 
-    async def get(self, url, params):
+    async def get(self, url, params, **kwargs):
         response = self._responses.pop(0)
         if isinstance(response, Exception):
             raise response
